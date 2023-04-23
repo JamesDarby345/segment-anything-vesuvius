@@ -12,16 +12,11 @@ print("Torchvision version:", torchvision.__version__)
 print("CUDA is available:", torch.cuda.is_available())
 torch.cuda.empty_cache()
 
-"""
-Development Script, scrollSegRLESeqRange.py is the most up to date script
-"""
-
 # sam_checkpoint = "segment-anything\sam_vit_l_0b3195.pth"
 sam_checkpoint = "sam_vit_h_4b8939.pth"
 model_type = "vit_h"
 device = "cuda"
-fileName = "014367.tif"
-filePath = "../../fullScrollDataTest/" + fileName
+filePath = "../../fullScrollData/"
 
 
 # coco_rle visualization
@@ -127,39 +122,48 @@ sam.to(device=device)
 mask_generator = SamAutomaticMaskGenerator(
     model=sam, output_mode="coco_rle"
 )  # ,output_mode="coco_rle
-image = cv2.imread(filePath)
-# image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
+scale_factor = 0.1  # Reduce the dimensions of the original size so batch can fit in GPU memory (8GB)
 
-scale_factor = (
-    0.1  # Reduce the dimensions of the original size so batch can fit in GPU memory
-)
-downsampled_image = downsample_image(image, scale_factor)
-masks = mask_generator.generate(downsampled_image)
+formatted_numbers = []
+formatted_numbers += [
+    f"{n:05d}" for n in range(0, 5)
+]  # change the range to change which images are processed
+# formatted_numbers += [
+#     f"{n:06d}" for n in range(12500, 12505)
+# ]  # artifact of how the images are named when I downloaded them, adding a 0 in front of all the 5 digit numbers
 
-print(len(masks))
-print(masks[0].keys())
+print(formatted_numbers)
 
-# rle_image = visualize_rle_mask(downsampled_image, masks[0]["segmentation"])
-# show_image(rle_image)
+for number in formatted_numbers:
+    torch.cuda.empty_cache()
+    print(filePath + number + ".tif")
+    image = cv2.imread(filePath + number + ".tif")
 
-scaled_rle_mask = scale_rle_mask(
-    masks[0]["segmentation"], 1 / scale_factor, image.shape
-)
-rle_image = visualize_rle_mask(image, scaled_rle_mask)
-show_image(rle_image)
+    downsampled_image = downsample_image(image, scale_factor)
+    masks = mask_generator.generate(downsampled_image)
 
-# applied_mask = apply_mask(image, scaled_rle_mask)
-# show_image(applied_mask)
+    print(len(masks))
+    print(masks[0].keys())
 
-dilated_applied_mask = apply_dilated_mask(image, scaled_rle_mask, 0.5)
-show_image(dilated_applied_mask)
+    # rle_image = visualize_rle_mask(downsampled_image, masks[0]["segmentation"])
+    # show_image(rle_image)
 
-# Save the masked image as a TIFF file
-outputFilePath = "../../losslesslyCompressedScrollData/c" + fileName
-cv2.imwrite(
-    outputFilePath,
-    cv2.cvtColor(dilated_applied_mask, cv2.COLOR_RGB2BGR),
-)
+    scaled_rle_mask = scale_rle_mask(
+        masks[0]["segmentation"], 1 / scale_factor, image.shape
+    )
+    # rle_image = visualize_rle_mask(image, scaled_rle_mask)
+    # show_image(rle_image)
 
-# compress_tiff(dilated_applied_mask, outputFilePath)
+    # applied_mask = apply_mask(image, scaled_rle_mask)
+    # show_image(applied_mask)
+
+    dilated_applied_mask = apply_dilated_mask(image, scaled_rle_mask, 0.5)
+    # show_image(dilated_applied_mask)
+
+    # Save the masked image as a TIFF file
+    outputFilePath = "../../losslesslyCompressedScrollData/c" + number + ".tif"
+    cv2.imwrite(
+        outputFilePath,
+        cv2.cvtColor(dilated_applied_mask, cv2.COLOR_RGB2BGR),
+    )
