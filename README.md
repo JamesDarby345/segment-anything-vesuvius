@@ -1,171 +1,70 @@
-# Segment Anything
+# Segment Anything? Segment A Vesuvius Scroll!
 
-**[Meta AI Research, FAIR](https://ai.facebook.com/research/)**
+A data processing pipeline using meta's Segment Anything model to segment the Vesuvius Scroll .tif files and mask the superfluous data with black pixels allowing for lossless compression (LZW) reducing .tif file size by ~70% (120MB -> ~40MB) while preserving all the useful data.
 
-[Alexander Kirillov](https://alexander-kirillov.github.io/), [Eric Mintun](https://ericmintun.github.io/), [Nikhila Ravi](https://nikhilaravi.com/), [Hanzi Mao](https://hanzimao.me/), Chloe Rolland, Laura Gustafson, [Tete Xiao](https://tetexiao.com), [Spencer Whitehead](https://www.spencerwhitehead.com/), Alex Berg, Wan-Yen Lo, [Piotr Dollar](https://pdollar.github.io/), [Ross Girshick](https://www.rossgirshick.info/)
+## TLDR Overview
 
-[[`Paper`](https://ai.facebook.com/research/publications/segment-anything/)] [[`Project`](https://segment-anything.com/)] [[`Demo`](https://segment-anything.com/demo)] [[`Dataset`](https://segment-anything.com/dataset/index.html)] [[`Blog`](https://ai.facebook.com/blog/segment-anything-foundation-model-image-segmentation/)] [[`BibTeX`](#citing-segment-anything)]
 
-![SAM design](assets/model_diagram.png?raw=true)
+## Setup
+This repo isnt particularly friendly if you want to setup the pipeline yourself as youll need all of dependencies for https://github.com/facebookresearch/segment-anything, along with the folder structure and file names I used to organize the Vesuvius Scroll .tif files. It would be possible to setup with a bit of fiddling around with file path variables though. I may in the future make this easier, but the goal of reducing the .tif file sizes while maintaing all useful information only requires the data to be processed once. Though this technique may be useful for other, unrelated applications.
 
-The **Segment Anything Model (SAM)** produces high quality object masks from input prompts such as points or boxes, and it can be used to generate masks for all objects in an image. It has been trained on a [dataset](https://segment-anything.com/dataset/index.html) of 11 million images and 1.1 billion masks, and has strong zero-shot performance on a variety of segmentation tasks.
+## Results
+I make the claim that this process can reduce the .tif file size by ~70% while maintaining all useful information. 
+The below images show the easy part to demonstrate, the reduced file size of the first file, 00000.tif (121MB) -> c00000.tif (31.4MB), while maintining the exact same image dimensions and file type.<br>
+![image](https://user-images.githubusercontent.com/49734270/233865658-4b3342cc-fc3c-48f0-97aa-e9e51ae53a76.png)
 
-<p float="left">
-  <img src="assets/masks1.png?raw=true" width="37.25%" />
-  <img src="assets/masks2.jpg?raw=true" width="61.5%" /> 
-</p>
+![image](https://user-images.githubusercontent.com/49734270/233865689-c30718b6-ae75-41be-9e2a-1a453c07b030.png)
 
-## Installation
+I have made the assumption that, the surrounding area [green], the case [yellow] and the detached 'wrap' [red] do not contain useful information for reading the scrolls.
 
-The code requires `python>=3.8`, as well as `pytorch>=1.7` and `torchvision>=0.8`. Please follow the instructions [here](https://pytorch.org/get-started/locally/) to install both PyTorch and TorchVision dependencies. Installing both PyTorch and TorchVision with CUDA support is strongly recommended.
+![image](https://user-images.githubusercontent.com/49734270/233868534-652f526c-dd2c-4ef1-b884-c7c333fd544f.png)
 
-Install Segment Anything:
+Using that assumption I segmented the image, and set every pixel not part of the scroll to black (0,0,0).
 
-```
-pip install git+https://github.com/facebookresearch/segment-anything.git
-```
+**Original Image**
+![image](https://user-images.githubusercontent.com/49734270/233868711-593be44b-ced3-42f0-973a-b84f923fc552.png)
 
-or clone the repository locally and install with
+**Result of Image processing Pipeline**
+![image](https://user-images.githubusercontent.com/49734270/233868736-9e6b8afb-1917-47dd-a64c-d7f638d0e5bb.png)
+*Note these images are not the originals, but smaller files that are under githubs upload threshold. Also note the mask over the scroll has been enlarged by 0.5% to help ensure any pixels containing papyri are not covered, this amount can be enlarged if adversarial examples are produced.
 
-```
-git clone git@github.com:facebookresearch/segment-anything.git
-cd segment-anything; pip install -e .
-```
+To convince myself that the lossless compression was in fact lossless I carried out a series of experiments to ensure none of the pixels in the scroll had been changed. I did this with the computeImageDiff files. The basic idea is to compare the original image, and the new compressed image by taking the absolute difference of each of their pixels and producing an image with that value as the value of each pixel. This should produce an image where the scroll portionis completly black while the background is the original background as black contributes 0. That verification technique produced the following image:
 
-The following optional dependencies are necessary for mask post-processing, saving masks in COCO format, the example notebooks, and exporting the model in ONNX format. `jupyter` is also required to run the example notebooks.
+![image](https://user-images.githubusercontent.com/49734270/233869107-b73416a7-c424-41e4-9dec-02e90fb360d5.png)
 
-```
-pip install opencv-python pycocotools matplotlib onnxruntime onnx
-```
+In addition I produced a version that multiplied the difference by 100, so even a difference in value of 1 would be noticeable. This does mean the background becomes noisy, but the uninterupted black shape of the scroll is what it important. This version produced the following image: 
 
-## <a name="GettingStarted"></a>Getting Started
+![image](https://user-images.githubusercontent.com/49734270/233869242-afe3abb0-16da-4136-bbcf-125182ed5064.png)
 
-First download a [model checkpoint](#model-checkpoints). Then the model can be used in just a few lines to get masks from a given prompt:
+I also produced a version that changed the color of any difference in pixels to red (computeImageDiffColor,py), and an updated version that added a radius so even a single pixel changed by a single value would become obvious (computeImageDiffColorRadius.py). The radius version produced the following result: 
 
-```
-from segment_anything import SamPredictor, sam_model_registry
-sam = sam_model_registry["<model_type>"](checkpoint="<path/to/checkpoint>")
-predictor = SamPredictor(sam)
-predictor.set_image(<your_image>)
-masks, _, _ = predictor.predict(<input_prompts>)
-```
+![image](https://user-images.githubusercontent.com/49734270/233869380-e4623615-c556-493c-b148-85c32a07d7c1.png)
 
-or generate masks for an entire image:
+To verify the scripts did what I thought they did, I edited 06052.tif by drawing on it with a 1 pixel wide brush to a grey that closely matched the scroll.
+Here is the 'corrupted' image:
+![image](https://user-images.githubusercontent.com/49734270/233869486-e4eda257-0fc0-467f-8536-51fb3f121ca7.png)
 
-```
-from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
-sam = sam_model_registry["<model_type>"](checkpoint="<path/to/checkpoint>")
-mask_generator = SamAutomaticMaskGenerator(sam)
-masks = mask_generator.generate(<your_image>)
-```
+And the result of the color radius script:
+![image](https://user-images.githubusercontent.com/49734270/233869501-445dbc7b-3fdb-4ff7-9064-32322e1edd21.png)
 
-Additionally, masks can be generated for images from the command line:
+As you can see it clearly brought forth any changes in the images pixel values. Thus I am convinced that this technique does in fact not change the pixel values of the images where the papri and ink are located, but does reduce the file size by nearly 70%. Please feel free to validate these findings. 
 
-```
-python scripts/amg.py --checkpoint <path/to/checkpoint> --model-type <model_type> --input <image_or_folder> --output <path/to/output>
-```
+## Pipeline process
+The pipeline carries out a number of steps to produce these results which I will go over on a high level in this section. The main file scrollSegRLESeqRange.py takes a range of images specified by their number and processes them one at a time. The first step is to make a downsized version of the original image, this is so the image (batch) can fit it the systems VRAM in one go during the segmenting process. I found 10x downsizing fit in my 8GB of VRAM on my GPU. This smaller image is used to produce the masks with meta's Segment Anything model. The pipeline then uses the dumb heuristic that the first (largest) mask is the scroll. This has some shortcomings as explained in the next section. Next the downsized mask is then scaled back up to the size of the original image, and reshaped to exactly match the original images dimensions. Next the mask is enlarged by 0.5% to ensure none of the scroll (useful information) is covered by the mask as a result of the scaling process. Note that the original image is not scaled in this process, only the mask is upscaled. Then a new image is created that sets all pixels not covered by the mask to black and uses the pixel values of the original image where the mask does cover it. This image is then saved with LZW compression, and the large area of uniform black pixels allows the compression to drastically reduce the .tif file size. As seen in the results section, the original pixels in the scroll maintain their original value.
 
-See the examples notebooks on [using SAM with prompts](/notebooks/predictor_example.ipynb) and [automatically generating masks](/notebooks/automatic_mask_generator_example.ipynb) for more details.
+## Limitations & potential improvements
+Due to the simplistic mask selection of choosing the largest mask, some development work or manual intervention would be needed for cases where the scroll does not constitue the largest single section/mask of the image. This started to happen somewhere between file 12600.tif and 13000.tif on the first scroll. But the method does mean it will work as is for the majority of the scroll. This also means all the data should be quickly manually screened via visual inspection to make sure the correct mask was choosen. This can easily be done by viewing the image thumbnails.
 
-<p float="left">
-  <img src="assets/notebook1.png?raw=true" width="49.1%" />
-  <img src="assets/notebook2.png?raw=true" width="48.9%" />
-</p>
+Example of model starting to choose incorrect masks:<br>
+![image](https://user-images.githubusercontent.com/49734270/233870282-2c1b7101-40e8-47b8-9061-54ad8bf53de3.png)
 
-## ONNX Export
 
-SAM's lightweight mask decoder can be exported to ONNX format so that it can be run in any environment that supports ONNX runtime, such as in-browser as showcased in the [demo](https://segment-anything.com/demo). Export the model with
 
-```
-python scripts/export_onnx_model.py --checkpoint <path/to/checkpoint> --model-type <model_type> --output <path/to/output>
-```
 
-See the [example notebook](https://github.com/facebookresearch/segment-anything/blob/main/notebooks/onnx_model_example.ipynb) for details on how to combine image preprocessing via SAM's backbone with mask prediction using the ONNX model. It is recommended to use the latest stable version of PyTorch for ONNX export.
 
-### Web demo
 
-The `demo/` folder has a simple one page React app which shows how to run mask prediction with the exported ONNX model in a web browser with multithreading. Please see [`demo/README.md`](https://github.com/facebookresearch/segment-anything/blob/main/demo/README.md) for more details.
 
-## <a name="Models"></a>Model Checkpoints
 
-Three model versions of the model are available with different backbone sizes. These models can be instantiated by running
 
-```
-from segment_anything import sam_model_registry
-sam = sam_model_registry["<model_type>"](checkpoint="<path/to/checkpoint>")
-```
 
-Click the links below to download the checkpoint for the corresponding model type.
 
-- **`default` or `vit_h`: [ViT-H SAM model.](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth)**
-- `vit_l`: [ViT-L SAM model.](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_l_0b3195.pth)
-- `vit_b`: [ViT-B SAM model.](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth)
-
-## Dataset
-
-See [here](https://ai.facebook.com/datasets/segment-anything/) for an overview of the datastet. The dataset can be downloaded [here](https://ai.facebook.com/datasets/segment-anything-downloads/). By downloading the datasets you agree that you have read and accepted the terms of the SA-1B Dataset Research License.
-
-We save masks per image as a json file. It can be loaded as a dictionary in python in the below format.
-
-```python
-{
-    "image"                 : image_info,
-    "annotations"           : [annotation],
-}
-
-image_info {
-    "image_id"              : int,              # Image id
-    "width"                 : int,              # Image width
-    "height"                : int,              # Image height
-    "file_name"             : str,              # Image filename
-}
-
-annotation {
-    "id"                    : int,              # Annotation id
-    "segmentation"          : dict,             # Mask saved in COCO RLE format.
-    "bbox"                  : [x, y, w, h],     # The box around the mask, in XYWH format
-    "area"                  : int,              # The area in pixels of the mask
-    "predicted_iou"         : float,            # The model's own prediction of the mask's quality
-    "stability_score"       : float,            # A measure of the mask's quality
-    "crop_box"              : [x, y, w, h],     # The crop of the image used to generate the mask, in XYWH format
-    "point_coords"          : [[x, y]],         # The point coordinates input to the model to generate the mask
-}
-```
-
-Image ids can be found in sa_images_ids.txt which can be downloaded using the above [link](https://ai.facebook.com/datasets/segment-anything-downloads/) as well.
-
-To decode a mask in COCO RLE format into binary:
-
-```
-from pycocotools import mask as mask_utils
-mask = mask_utils.decode(annotation["segmentation"])
-```
-
-See [here](https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/mask.py) for more instructions to manipulate masks stored in RLE format.
-
-## License
-
-The model is licensed under the [Apache 2.0 license](LICENSE).
-
-## Contributing
-
-See [contributing](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md).
-
-## Contributors
-
-The Segment Anything project was made possible with the help of many contributors (alphabetical):
-
-Aaron Adcock, Vaibhav Aggarwal, Morteza Behrooz, Cheng-Yang Fu, Ashley Gabriel, Ahuva Goldstand, Allen Goodman, Sumanth Gurram, Jiabo Hu, Somya Jain, Devansh Kukreja, Robert Kuo, Joshua Lane, Yanghao Li, Lilian Luong, Jitendra Malik, Mallika Malhotra, William Ngan, Omkar Parkhi, Nikhil Raina, Dirk Rowe, Neil Sejoor, Vanessa Stark, Bala Varadarajan, Bram Wasti, Zachary Winstrom
-
-## Citing Segment Anything
-
-If you use SAM or SA-1B in your research, please use the following BibTeX entry.
-
-```
-@article{kirillov2023segany,
-  title={Segment Anything},
-  author={Kirillov, Alexander and Mintun, Eric and Ravi, Nikhila and Mao, Hanzi and Rolland, Chloe and Gustafson, Laura and Xiao, Tete and Whitehead, Spencer and Berg, Alexander C. and Lo, Wan-Yen and Doll{\'a}r, Piotr and Girshick, Ross},
-  journal={arXiv:2304.02643},
-  year={2023}
-}
-```
