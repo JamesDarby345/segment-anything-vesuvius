@@ -1,9 +1,9 @@
 # Segment Anything? Segment A Vesuvius Scroll!
 
-A data processing pipeline using meta's Segment Anything model to segment the Vesuvius Scroll .tif files and mask the superfluous data with black pixels allowing for lossless compression (LZW) reducing .tif file size by ~70% (120MB -> ~40MB) while preserving all the useful data.
+A data processing pipeline forked from meta's Segment Anything model to reduce the Vesuvius Scroll .tif file sizes via segmenting the images and masking the superfluous data with black pixels allowing for lossless compression (LZW) reducing .tif file size by ~70% (120MB -> ~40MB) while preserving all the useful data.
 
 ## TLDR Overview
-
+Since the output of this script is smaller .tif image files with no information loss, the optimal path forward is that I work with the Vesuvius Scroll Challenge organizers to put process all the date and upload it onto the vesuvius download server for distribution in the future. Thus for the average participant this repo has no use. But I have documented the results of the pipeline, along with the experiments I ran to support my claim. I also wrote a high level overview of what the pipeline is doing, and a section on the limitations of the technique as of now. 
 
 ## Setup
 This repo isnt particularly friendly if you want to setup the pipeline yourself as youll need all of dependencies for https://github.com/facebookresearch/segment-anything, along with the folder structure and file names I used to organize the Vesuvius Scroll .tif files. It would be possible to setup with a bit of fiddling around with file path variables though. I may in the future make this easier, but the goal of reducing the .tif file sizes while maintaing all useful information only requires the data to be processed once. Though this technique may be useful for other, unrelated applications.
