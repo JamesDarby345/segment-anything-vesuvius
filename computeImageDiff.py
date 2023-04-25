@@ -1,8 +1,8 @@
 import cv2
 import os
 
-fileName = "06052.tif"
-file_path = "../../fullScrollDataTest/" + fileName
+fileName = "00000.tif"
+file_path = "../../fullScrollData/" + fileName
 
 # Load the images
 image1 = cv2.imread(file_path)
@@ -15,7 +15,7 @@ if image1.shape != image2.shape:
 diff_image = cv2.absdiff(image1, image2) * 100
 
 # Save the resulting image
-outputFilePath = "../../comparisonScrollData/comp" + fileName
+outputFilePath = "../../comparisonScrollData/comp100x" + fileName
 cv2.imwrite(
     outputFilePath,
     cv2.cvtColor(diff_image, cv2.COLOR_RGB2BGR),

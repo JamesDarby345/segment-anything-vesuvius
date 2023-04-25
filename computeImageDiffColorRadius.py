@@ -2,7 +2,7 @@ import cv2
 import os
 import numpy as np
 
-fileName = "06052.tif"  # file to compare before and after lossless compression
+fileName = "00000.tif"  # file to compare before and after lossless compression
 file_path = "../../fullScrollData/" + fileName
 
 # Load the images
@@ -36,7 +36,7 @@ dilated_mask = cv2.dilate(mask.astype(np.uint8), kernel)
 colored_diff = np.where(dilated_mask[..., np.newaxis] == 1, bright_color, diff_image)
 
 # Save the resulting image
-outputFilePath = "../../comparisonScrollData/comp" + fileName
+outputFilePath = "../../comparisonScrollData/compRad" + fileName
 cv2.imwrite(
     outputFilePath,
     cv2.cvtColor(colored_diff, cv2.COLOR_RGB2BGR),

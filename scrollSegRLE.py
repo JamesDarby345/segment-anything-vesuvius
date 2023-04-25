@@ -20,8 +20,8 @@ Development Script, scrollSegRLESeqRange.py is the most up to date script
 sam_checkpoint = "sam_vit_h_4b8939.pth"
 model_type = "vit_h"
 device = "cuda"
-fileName = "014367.tif"
-filePath = "../../fullScrollDataTest/" + fileName
+fileName = "08049.tif"
+filePath = "../../fullScrollData/" + fileName
 
 
 # coco_rle visualization
@@ -125,7 +125,7 @@ def apply_dilated_mask(image, rle_mask, dilation_percentage):
 sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
 sam.to(device=device)
 mask_generator = SamAutomaticMaskGenerator(
-    model=sam, output_mode="coco_rle"
+    model=sam, output_mode="coco_rle", points_per_batch=100
 )  # ,output_mode="coco_rle
 image = cv2.imread(filePath)
 # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)

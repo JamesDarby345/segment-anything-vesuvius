@@ -1,9 +1,9 @@
-import time
 from PIL import Image
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from pycocotools import mask as coco_mask
 import numpy as np
 import cv2
+from segment_anything.predictor import SamPredictor
 import torch
 import torchvision
 import matplotlib.pyplot as plt
@@ -13,11 +13,16 @@ print("Torchvision version:", torchvision.__version__)
 print("CUDA is available:", torch.cuda.is_available())
 torch.cuda.empty_cache()
 
+"""
+Development Script, scrollSegRLESeqRange.py is the most up to date script
+"""
+
 # sam_checkpoint = "segment-anything\sam_vit_l_0b3195.pth"
 sam_checkpoint = "sam_vit_h_4b8939.pth"
 model_type = "vit_h"
 device = "cuda"
-filePath = "../../fullScrollData/"
+fileName = "08049.tif"
+filePath = "../../fullScrollData/" + fileName
 
 
 # coco_rle visualization
@@ -120,59 +125,43 @@ def apply_dilated_mask(image, rle_mask, dilation_percentage):
 
 sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
 sam.to(device=device)
-mask_generator = SamAutomaticMaskGenerator(
-    model=sam, output_mode="coco_rle"
-)  # ,output_mode="coco_rle
+predictor = SamPredictor(sam)
 
-scale_factor = 0.1  # Reduce the dimensions of the original size so batch can fit in GPU memory (8GB)
+image = cv2.imread(filePath)
+scale_factor = (
+    0.1  # Reduce the dimensions of the original size so batch can fit in GPU memory
+)
+downsampled_image = downsample_image(image, scale_factor)
 
-formatted_numbers = []
-formatted_numbers += [
-    f"{n:05d}"
-    for n in range(8050, 9001)  # end of range needs to be 1 higher than you want
-]  # change the range to change which images are processed
-# formatted_numbers += [
-#     f"{n:06d}" for n in range(12500, 12505)
-# ]  # artifact of how the images are named when I downloaded them, adding a 0 in front of all the 5 digit numbers
+predictor.set_image(downsampled_image)
+masks, _, _ = predictor.predict(
+    "mask the scroll in the middle of the image, ignoring the case on the side"
+)
 
-print(formatted_numbers[0], formatted_numbers[-1], len(formatted_numbers))
 
-startTime = time.time()
-i = 0
-for number in formatted_numbers:
-    if i % 10 == 0:
-        print("sleep on image", i)
-        time.sleep(8)  # allow GPU to cool down
-    torch.cuda.empty_cache()
-    print(filePath + number + ".tif")
-    image = cv2.imread(filePath + number + ".tif")
+print(len(masks))
+print(masks[0].keys())
 
-    downsampled_image = downsample_image(image, scale_factor)
-    masks = mask_generator.generate(downsampled_image)
+# rle_image = visualize_rle_mask(downsampled_image, masks[0]["segmentation"])
+# show_image(rle_image)
 
-    print(len(masks))
-    print(masks[0].keys())
+scaled_rle_mask = scale_rle_mask(
+    masks[0]["segmentation"], 1 / scale_factor, image.shape
+)
+rle_image = visualize_rle_mask(image, scaled_rle_mask)
+show_image(rle_image)
 
-    # rle_image = visualize_rle_mask(downsampled_image, masks[0]["segmentation"])
-    # show_image(rle_image)
+# applied_mask = apply_mask(image, scaled_rle_mask)
+# show_image(applied_mask)
 
-    scaled_rle_mask = scale_rle_mask(
-        masks[0]["segmentation"], 1 / scale_factor, image.shape
-    )
-    # rle_image = visualize_rle_mask(image, scaled_rle_mask)
-    # show_image(rle_image)
+dilated_applied_mask = apply_dilated_mask(image, scaled_rle_mask, 0.5)
+show_image(dilated_applied_mask)
 
-    # applied_mask = apply_mask(image, scaled_rle_mask)
-    # show_image(applied_mask)
+# Save the masked image as a TIFF file
+outputFilePath = "../../losslesslyCompressedScrollData/c" + fileName
+cv2.imwrite(
+    outputFilePath,
+    cv2.cvtColor(dilated_applied_mask, cv2.COLOR_RGB2BGR),
+)
 
-    dilated_applied_mask = apply_dilated_mask(image, scaled_rle_mask, 0.5)
-    # show_image(dilated_applied_mask)
-
-    # Save the masked image as a TIFF file
-    outputFilePath = "../../losslesslyCompressedScrollData/c" + number + ".tif"
-    cv2.imwrite(
-        outputFilePath,
-        cv2.cvtColor(dilated_applied_mask, cv2.COLOR_RGB2BGR),
-    )
-    i += 1
-print("Time taken:", time.time() - startTime, " seconds")
+# compress_tiff(dilated_applied_mask, outputFilePath)

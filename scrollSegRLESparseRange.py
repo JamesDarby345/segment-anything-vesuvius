@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 
 print("PyTorch version:", torch.__version__)
 print("Torchvision version:", torchvision.__version__)
-print("CUDA is available:", torch.cuda.is_available())
+cuda_available = torch.cuda.is_available()
+print("CUDA is available:", cuda_available)
 torch.cuda.empty_cache()
 
 # sam_checkpoint = "segment-anything\sam_vit_l_0b3195.pth"
@@ -118,19 +119,27 @@ def apply_dilated_mask(image, rle_mask, dilation_percentage):
     return masked_image
 
 
+def record_skipped_image(number):
+    with open("../../compressedScrollDataVerification/missing.txt", "a") as myfile:
+        myfile.write(number + "\n")
+
+
 sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-sam.to(device=device)
+if cuda_available:
+    sam.to(device=device)
 mask_generator = SamAutomaticMaskGenerator(
-    model=sam, output_mode="coco_rle"
+    model=sam, output_mode="coco_rle", min_mask_region_area=0
 )  # ,output_mode="coco_rle
 
 scale_factor = 0.1  # Reduce the dimensions of the original size so batch can fit in GPU memory (8GB)
+dilation = 1  # Dilate the mask by 3% to provide a buffer so that the entire scroll region is covered
 
 formatted_numbers = []
 formatted_numbers += [
     f"{n:05d}"
-    for n in range(8050, 9001)  # end of range needs to be 1 higher than you want
+    for n in range(3044, 4001)  # end of range needs to be 1 higher than you want
 ]  # change the range to change which images are processed
+
 # formatted_numbers += [
 #     f"{n:06d}" for n in range(12500, 12505)
 # ]  # artifact of how the images are named when I downloaded them, adding a 0 in front of all the 5 digit numbers
@@ -139,40 +148,56 @@ print(formatted_numbers[0], formatted_numbers[-1], len(formatted_numbers))
 
 startTime = time.time()
 i = 0
+mask_freq = 25
 for number in formatted_numbers:
-    if i % 10 == 0:
-        print("sleep on image", i)
-        time.sleep(8)  # allow GPU to cool down
-    torch.cuda.empty_cache()
-    print(filePath + number + ".tif")
-    image = cv2.imread(filePath + number + ".tif")
+    try:
+        image = cv2.imread(filePath + number + ".tif")
+    except:
+        record_skipped_image(number)
+        continue
+    if image is None:
+        record_skipped_image(number)
+        continue
+    if i % mask_freq == 0:
+        torch.cuda.empty_cache()
+        print(filePath + number + ".tif")
 
-    downsampled_image = downsample_image(image, scale_factor)
-    masks = mask_generator.generate(downsampled_image)
+        downsampled_image = downsample_image(image, scale_factor)
+        masks = mask_generator.generate(downsampled_image)
 
-    print(len(masks))
-    print(masks[0].keys())
+        print(len(masks))
+        print(masks[0].keys())
 
-    # rle_image = visualize_rle_mask(downsampled_image, masks[0]["segmentation"])
-    # show_image(rle_image)
+        # rle_image = visualize_rle_mask(downsampled_image, masks[0]["segmentation"])
+        # show_image(rle_image)
 
-    scaled_rle_mask = scale_rle_mask(
-        masks[0]["segmentation"], 1 / scale_factor, image.shape
-    )
+        scaled_rle_mask = scale_rle_mask(
+            masks[0]["segmentation"], 1 / scale_factor, image.shape
+        )
     # rle_image = visualize_rle_mask(image, scaled_rle_mask)
     # show_image(rle_image)
 
     # applied_mask = apply_mask(image, scaled_rle_mask)
     # show_image(applied_mask)
 
-    dilated_applied_mask = apply_dilated_mask(image, scaled_rle_mask, 0.5)
+    dilated_applied_mask = apply_dilated_mask(image, scaled_rle_mask, dilation)
     # show_image(dilated_applied_mask)
 
     # Save the masked image as a TIFF file
-    outputFilePath = "../../losslesslyCompressedScrollData/c" + number + ".tif"
+    outputFilePath = "../../processedData02001-04000/" + number + ".tif"
+    outputImage = cv2.cvtColor(dilated_applied_mask, cv2.COLOR_RGB2BGR)
     cv2.imwrite(
         outputFilePath,
-        cv2.cvtColor(dilated_applied_mask, cv2.COLOR_RGB2BGR),
+        outputImage,
     )
+
+    if i % mask_freq == 0 or i % mask_freq == mask_freq - 1:
+        outputFilePathVerification = (
+            "../../compressedScrollDataVerification/" + number + ".tif"
+        )
+        cv2.imwrite(
+            outputFilePathVerification,
+            outputImage,
+        )
     i += 1
 print("Time taken:", time.time() - startTime, " seconds")
