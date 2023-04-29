@@ -3,12 +3,14 @@ from PIL import Image
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from pycocotools import mask as coco_mask
 import numpy as np
-from tifffile import tifffile
 import cv2
+from PIL import Image
 import torch
 import torchvision
 import matplotlib.pyplot as plt
 import os
+
+Image.MAX_IMAGE_PIXELS = 150_000_000
 
 print("PyTorch version:", torch.__version__)
 print("Torchvision version:", torchvision.__version__)
@@ -17,18 +19,29 @@ print("CUDA is available:", cuda_available)
 torch.cuda.empty_cache()
 
 # print("sleeping...")
-# time.sleep(1 * 3600)
+# time.sleep(4 * 3600)
 # print("finished sleeping")
 # sam_checkpoint = "segment-anything\sam_vit_l_0b3195.pth"
 sam_checkpoint = "sam_vit_h_4b8939.pth"
 model_type = "vit_h"
 device = "cuda"
-filePath = "../../Scroll2/fullScroll2Data/"
-# filePath = "../../fullScrollData/"
+# filePath = "../../Scroll2/fullScroll2Data/"
+filePath = "../../fullScrollData/"
 
 
-def read_image_tifffile(file_path):
-    return tifffile.imread(file_path)
+def read_image_pil(file_path):
+    with Image.open(file_path) as img:
+        return np.array(img)
+
+
+def write_image_pil(file_path, image):
+    try:
+        img = Image.fromarray(image)
+        img = img.convert("I;16")
+        img.save(file_path, compression="tiff_lzw")
+    except:
+        return False
+    return True
 
 
 # coco_rle visualization
@@ -41,23 +54,6 @@ def visualize_rle_mask(image, rle_mask, alpha=0.5):
     masked_image[binary_mask == 1] = (
         masked_image[binary_mask == 1] * (1 - alpha) + np.array([255, 0, 0]) * alpha
     ).astype(np.uint8)
-
-    return masked_image
-
-
-# TODO - this is not working, visualize multiple masks
-def visualize_rle_masks(image, rle_masks, alpha=0.5):
-    # Create a copy of the image to overlay the masks
-    masked_image = image.copy()
-
-    for rle_mask in rle_masks:
-        # Decode the RLE mask into a binary mask
-        binary_mask = coco_mask.decode(rle_mask)
-
-        # Overlay the binary mask on the image
-        masked_image[binary_mask == 1] = (
-            masked_image[binary_mask == 1] * (1 - alpha) + np.array([255, 0, 0]) * alpha
-        ).astype(np.uint8)
 
     return masked_image
 
@@ -101,19 +97,6 @@ def downsample_image(image, scale_factor):
     return resized_image
 
 
-def apply_mask(image, rle_mask):
-    # Decode the RLE mask into a binary mask
-    binary_mask = coco_mask.decode(rle_mask)
-
-    # Invert the binary mask
-    # inverted_mask = np.logical_not(binary_mask).astype(np.uint8)
-
-    # Multiply the original image by the binary mask
-    masked_image = image * np.stack([binary_mask] * 3, axis=-1)
-
-    return masked_image
-
-
 # fast
 def apply_dilated_mask(image, rle_mask, dilation_percentage):
     # Decode the RLE mask into a binary mask
@@ -149,13 +132,12 @@ dilation = 2  # Dilate the mask by 3% to provide a buffer so that the entire scr
 
 formatted_numbers = []
 formatted_numbers += [
-    f"{n:05d}"
-    for n in range(9500, 9501)  # end of range needs to be 1 higher than you want
+    f"{n:05d}" for n in range(0, 1)  # end of range needs to be 1 higher than you want
 ]  # change the range to change which images are processed
 
 chosen_mask = 0
-output_folder = "Scroll2/processedData06501-08000"
-# output_folder = "processedData00000-02000"
+# output_folder = "Scroll2/processedData00000-01000"
+output_folder = "processedData00000-02000"
 mask_freq = 50
 
 # formatted_numbers += [
@@ -169,7 +151,7 @@ i = 0
 for number in formatted_numbers:
     try:
         timeStartRead = time.time()
-        image = cv2.imread(filePath + number + ".tif", cv2.IMREAD_ANYDEPTH)
+        image = read_image_pil(filePath + number + ".tif")
         print(number + " read time:", time.time() - timeStartRead)
     except:
         record_skipped_image(number)
@@ -215,10 +197,7 @@ for number in formatted_numbers:
     if not os.path.exists(outputCheck):
         raise ValueError("Output directory does not exist")
     startTimeW = time.time()
-    written = cv2.imwrite(
-        outputFilePath,
-        dilated_applied_mask,
-    )
+    written = write_image_pil(outputFilePath, dilated_applied_mask)
     print(number + " write time:", time.time() - startTimeW)
 
     if not written:
@@ -228,9 +207,6 @@ for number in formatted_numbers:
         outputFilePathVerification = (
             "../../compressedScrollDataVerification/" + number + ".tif"
         )
-        cv2.imwrite(
-            outputFilePathVerification,
-            dilated_applied_mask,
-        )
+        write_image_pil(outputFilePath, dilated_applied_mask)
     i += 1
 print("Time taken:", time.time() - startTime, " seconds")

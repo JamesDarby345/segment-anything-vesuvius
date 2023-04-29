@@ -1,14 +1,19 @@
 import time
-from PIL import Image
+from tifffile import tifffile
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from pycocotools import mask as coco_mask
 import numpy as np
-from tifffile import tifffile
 import cv2
+from PIL import Image
 import torch
 import torchvision
 import matplotlib.pyplot as plt
 import os
+from scipy import ndimage
+
+# from scipy.ndimage import center_of_mass
+
+Image.MAX_IMAGE_PIXELS = 150_000_000
 
 print("PyTorch version:", torch.__version__)
 print("Torchvision version:", torchvision.__version__)
@@ -17,18 +22,40 @@ print("CUDA is available:", cuda_available)
 torch.cuda.empty_cache()
 
 # print("sleeping...")
-# time.sleep(1 * 3600)
+# time.sleep(4 * 3600)
 # print("finished sleeping")
 # sam_checkpoint = "segment-anything\sam_vit_l_0b3195.pth"
 sam_checkpoint = "sam_vit_h_4b8939.pth"
 model_type = "vit_h"
 device = "cuda"
-filePath = "../../Scroll2/fullScroll2Data/"
-# filePath = "../../fullScrollData/"
+# filePath = "../../Scroll2/fullScroll2Data/"
+filePath = "../../fullScrollData/"
 
 
 def read_image_tifffile(file_path):
     return tifffile.imread(file_path)
+    # return cv2.imread(filePath + number + ".tif", cv2.IMREAD_ANYDEPTH)
+
+
+def write_image_cv2(file_path, image):
+    try:
+        cv2.imwrite(
+            file_path,
+            image,
+        )
+    except Exception as e:
+        print(e)
+        return False
+    return True
+
+
+def write_image_tifffile(file_path, image):
+    try:
+        tifffile.imwrite(file_path, image, compression="lzw")
+    except Exception as e:
+        print(e)
+        return False
+    return True
 
 
 # coco_rle visualization
@@ -45,23 +72,6 @@ def visualize_rle_mask(image, rle_mask, alpha=0.5):
     return masked_image
 
 
-# TODO - this is not working, visualize multiple masks
-def visualize_rle_masks(image, rle_masks, alpha=0.5):
-    # Create a copy of the image to overlay the masks
-    masked_image = image.copy()
-
-    for rle_mask in rle_masks:
-        # Decode the RLE mask into a binary mask
-        binary_mask = coco_mask.decode(rle_mask)
-
-        # Overlay the binary mask on the image
-        masked_image[binary_mask == 1] = (
-            masked_image[binary_mask == 1] * (1 - alpha) + np.array([255, 0, 0]) * alpha
-        ).astype(np.uint8)
-
-    return masked_image
-
-
 def show_image(image):
     plt.figure(figsize=(20, 20))
     plt.imshow(image)
@@ -69,9 +79,19 @@ def show_image(image):
     plt.show()
 
 
+def remove_disconnected_regions(binary_mask):
+    labeled_mask, _ = ndimage.label(binary_mask)
+    height, width = binary_mask.shape
+    center_y, center_x = height // 2, width // 2
+    central_label = labeled_mask[center_y, center_x]
+    central_region_mask = labeled_mask == central_label
+    return central_region_mask
+
+
 def scale_rle_mask(rle_mask, scale_factor, image_size=(1024, 1024)):
     # Decode the RLE mask into a binary mask
     binary_mask = coco_mask.decode(rle_mask)
+    binary_mask = remove_disconnected_regions(binary_mask)
 
     # Resize the binary mask
     new_height = int(binary_mask.shape[0] * scale_factor)
@@ -99,19 +119,6 @@ def downsample_image(image, scale_factor):
     # Use cv2.resize() to downsample the image
     resized_image = cv2.resize(image, new_size, interpolation=cv2.INTER_AREA)
     return resized_image
-
-
-def apply_mask(image, rle_mask):
-    # Decode the RLE mask into a binary mask
-    binary_mask = coco_mask.decode(rle_mask)
-
-    # Invert the binary mask
-    # inverted_mask = np.logical_not(binary_mask).astype(np.uint8)
-
-    # Multiply the original image by the binary mask
-    masked_image = image * np.stack([binary_mask] * 3, axis=-1)
-
-    return masked_image
 
 
 # fast
@@ -148,15 +155,13 @@ scale_factor = 0.1  # Reduce the dimensions of the original size so batch can fi
 dilation = 2  # Dilate the mask by 3% to provide a buffer so that the entire scroll region is covered
 
 formatted_numbers = []
-formatted_numbers += [
-    f"{n:05d}"
-    for n in range(9500, 9501)  # end of range needs to be 1 higher than you want
-]  # change the range to change which images are processed
+
+formatted_numbers += [f"{n:05d}" for n in range(9970, 9988 + 1)]
 
 chosen_mask = 0
-output_folder = "Scroll2/processedData06501-08000"
-# output_folder = "processedData00000-02000"
-mask_freq = 50
+# output_folder = "Scroll2/processedData00000-01000"
+output_folder = "processedData00000-02000"
+mask_freq = 30
 
 # formatted_numbers += [
 #     f"{n:06d}" for n in range(12500, 12505)
@@ -169,7 +174,7 @@ i = 0
 for number in formatted_numbers:
     try:
         timeStartRead = time.time()
-        image = cv2.imread(filePath + number + ".tif", cv2.IMREAD_ANYDEPTH)
+        image = read_image_tifffile(filePath + number + ".tif")
         print(number + " read time:", time.time() - timeStartRead)
     except:
         record_skipped_image(number)
@@ -200,6 +205,7 @@ for number in formatted_numbers:
         scaled_rle_mask = scale_rle_mask(
             masks[chosen_mask]["segmentation"], 1 / scale_factor, image.shape
         )
+
     # rle_image = visualize_rle_mask(image, scaled_rle_mask)
     # show_image(rle_image)
 
@@ -207,6 +213,7 @@ for number in formatted_numbers:
     # show_image(applied_mask)
 
     dilated_applied_mask = apply_dilated_mask(image, scaled_rle_mask, dilation)
+    #  print(dilated_applied_mask.dtype)
     # show_image(dilated_applied_mask)
 
     # Save the masked image as a 16-bit grayscale TIFF file
@@ -215,16 +222,13 @@ for number in formatted_numbers:
     if not os.path.exists(outputCheck):
         raise ValueError("Output directory does not exist")
     startTimeW = time.time()
-    written = cv2.imwrite(
-        outputFilePath,
-        dilated_applied_mask,
-    )
+    written = write_image_cv2(outputFilePath, dilated_applied_mask)
     print(number + " write time:", time.time() - startTimeW)
 
     if not written:
         print("Failed to write image to", outputFilePath)
 
-    if i % mask_freq == 0 or i % mask_freq == mask_freq - 1:
+    if i % mask_freq == 0:  # or i % mask_freq == mask_freq - 1:
         outputFilePathVerification = (
             "../../compressedScrollDataVerification/" + number + ".tif"
         )

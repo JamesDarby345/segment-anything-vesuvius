@@ -129,7 +129,7 @@ scale_factor = 0.1  # Reduce the dimensions of the original size so batch can fi
 formatted_numbers = []
 formatted_numbers += [
     f"{n:05d}"
-    for n in range(8050, 9001)  # end of range needs to be 1 higher than you want
+    for n in range(9500, 9501)  # end of range needs to be 1 higher than you want
 ]  # change the range to change which images are processed
 # formatted_numbers += [
 #     f"{n:06d}" for n in range(12500, 12505)
