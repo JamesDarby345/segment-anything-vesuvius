@@ -10,6 +10,8 @@ import torchvision
 import matplotlib.pyplot as plt
 import os
 from scipy import ndimage
+import tkinter as tk
+from tkinter import simpledialog
 
 # from scipy.ndimage import center_of_mass
 
@@ -22,7 +24,7 @@ print("CUDA is available:", cuda_available)
 torch.cuda.empty_cache()
 
 # print("sleeping...")
-# time.sleep(4 * 3600)
+# time.sleep(3.5 * 3600)
 # print("finished sleeping")
 # sam_checkpoint = "segment-anything\sam_vit_l_0b3195.pth"
 sam_checkpoint = "sam_vit_h_4b8939.pth"
@@ -56,6 +58,16 @@ def write_image_tifffile(file_path, image):
         print(e)
         return False
     return True
+
+
+def get_number():
+    root = tk.Tk()
+    root.withdraw()  # Hide the main window
+    num = simpledialog.askinteger(
+        "Enter a number", "Please enter a number:"
+    )  # Show the popup
+    root.destroy()  # Destroy the main window when done
+    return num
 
 
 # coco_rle visualization
@@ -155,17 +167,13 @@ scale_factor = 0.1  # Reduce the dimensions of the original size so batch can fi
 dilation = 2  # Dilate the mask by 3% to provide a buffer so that the entire scroll region is covered
 
 formatted_numbers = []
-
-formatted_numbers += [f"{n:05d}" for n in range(9970, 9988 + 1)]
+formatted_numbers += [f"{n:04d}" for n in range(1582, 1609 + 1)]
 
 chosen_mask = 0
 # output_folder = "Scroll2/processedData00000-01000"
-output_folder = "processedData00000-02000"
-mask_freq = 30
-
-# formatted_numbers += [
-#     f"{n:06d}" for n in range(12500, 12505)
-# ]  # artifact of how the images are named when I downloaded them, adding a 0 in front of all the 5 digit numbers
+output_folder = "processedData04001-06051"
+mask_freq = 25
+manuallyChooseMask = 0
 
 print(formatted_numbers[0], formatted_numbers[-1], len(formatted_numbers))
 
@@ -198,9 +206,16 @@ for number in formatted_numbers:
         # for m in masks:
         #     print(m["area"], ind)
         #     ind += 1
-
-        # rle_image = visualize_rle_mask(downsampled_image, masks[0]["segmentation"])
-        # show_image(rle_image)
+        if manuallyChooseMask:
+            rle_image = visualize_rle_mask(downsampled_image, masks[0]["segmentation"])
+            show_image(rle_image)
+            rle_image = visualize_rle_mask(downsampled_image, masks[1]["segmentation"])
+            show_image(rle_image)
+            rle_image = visualize_rle_mask(downsampled_image, masks[2]["segmentation"])
+            show_image(rle_image)
+            rle_image = visualize_rle_mask(downsampled_image, masks[3]["segmentation"])
+            show_image(rle_image)
+            chosen_mask = get_number()
 
         scaled_rle_mask = scale_rle_mask(
             masks[chosen_mask]["segmentation"], 1 / scale_factor, image.shape
@@ -228,7 +243,7 @@ for number in formatted_numbers:
     if not written:
         print("Failed to write image to", outputFilePath)
 
-    if i % mask_freq == 0:  # or i % mask_freq == mask_freq - 1:
+    if i % mask_freq == 0 or i % mask_freq == mask_freq - 1 or i % 50 == 0:
         outputFilePathVerification = (
             "../../compressedScrollDataVerification/" + number + ".tif"
         )
